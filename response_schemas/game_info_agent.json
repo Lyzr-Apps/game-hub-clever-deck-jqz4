@@ -1,0 +1,26 @@
+{
+  "agent_name": "Game Info Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "schema": {
+    "game_title": "string",
+    "developer": "string",
+    "publisher": "string",
+    "description": "string",
+    "platforms": ["string"],
+    "genre": ["string"],
+    "current_version": "string",
+    "release_date": "string",
+    "upcoming_version": "string or null",
+    "upcoming_release_date": "string or null",
+    "download_links": [{"platform": "string", "store_name": "string", "url": "string"}],
+    "system_requirements": {
+      "minimum": {"os": "string", "processor": "string", "memory": "string", "graphics": "string", "storage": "string"},
+      "recommended": {"os": "string", "processor": "string", "memory": "string", "graphics": "string", "storage": "string"}
+    },
+    "ratings": [{"source": "string", "score": "string"}],
+    "related_games": ["string"],
+    "summary": "string"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "game_info_agent": {
+      "agent_id": "69a28da3e72641e0c6070b59",
+      "name": "Game Info Agent",
+      "provider": "perplexity",
+      "model": "sonar-pro"
+    }
+  }
+}

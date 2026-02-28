@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    {"id": "input_node", "type": "Input", "label": "User Query", "nodeCategory": "input"},
+    {"id": "game_info_agent", "type": "Agent", "label": "Game Info Agent", "nodeCategory": "agent"},
+    {"id": "output_node", "type": "Output", "label": "Game Info Response", "nodeCategory": "end"}
+  ],
+  "edges": [
+    {"source": "input_node", "target": "game_info_agent"},
+    {"source": "game_info_agent", "target": "output_node"}
+  ]
+}

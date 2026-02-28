@@ -1,0 +1,106 @@
+{
+  "agent_name": "Game Info Agent",
+  "agent_id": "69a28da3e72641e0c6070b59",
+  "description": "Searches the web for comprehensive game information including descriptions, download links, latest/upcoming versions, system requirements, platform availability, and release dates. Responds to user queries with structured, detailed game data.",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "game_title": "string",
+    "developer": "string",
+    "publisher": "string",
+    "description": "string",
+    "platforms": [
+      "string"
+    ],
+    "genre": [
+      "string"
+    ],
+    "current_version": "string",
+    "release_date": "string",
+    "upcoming_version": "string",
+    "upcoming_release_date": "string",
+    "download_links": [
+      {
+        "platform": "string",
+        "store_name": "string",
+        "url": "string"
+      }
+    ],
+    "system_requirements": {
+      "minimum": {
+        "os": "string",
+        "processor": "string",
+        "memory": "string",
+        "graphics": "string",
+        "storage": "string"
+      },
+      "recommended": {
+        "os": "string",
+        "processor": "string",
+        "memory": "string",
+        "graphics": "string",
+        "storage": "string"
+      }
+    },
+    "ratings": [
+      {
+        "source": "string",
+        "score": "string"
+      }
+    ],
+    "related_games": [
+      "string"
+    ],
+    "summary": "string"
+  },
+  "example_response": {
+    "game_title": "sample string",
+    "developer": "sample string",
+    "publisher": "sample string",
+    "description": "sample string",
+    "platforms": [
+      "sample string"
+    ],
+    "genre": [
+      "sample string"
+    ],
+    "current_version": "sample string",
+    "release_date": "sample string",
+    "upcoming_version": "sample string",
+    "upcoming_release_date": "sample string",
+    "download_links": [
+      {
+        "platform": "sample string",
+        "store_name": "sample string",
+        "url": "sample string"
+      }
+    ],
+    "system_requirements": {
+      "minimum": {
+        "os": "sample string",
+        "processor": "sample string",
+        "memory": "sample string",
+        "graphics": "sample string",
+        "storage": "sample string"
+      },
+      "recommended": {
+        "os": "sample string",
+        "processor": "sample string",
+        "memory": "sample string",
+        "graphics": "sample string",
+        "storage": "sample string"
+      }
+    },
+    "ratings": [
+      {
+        "source": "sample string",
+        "score": "sample string"
+      }
+    ],
+    "related_games": [
+      "sample string"
+    ],
+    "summary": "sample string"
+  }
+}
