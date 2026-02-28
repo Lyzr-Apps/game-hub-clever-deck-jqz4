@@ -29,6 +29,7 @@ interface GameData {
   related_games?: string[]
   summary?: string
   _rawText?: string
+  _isLoading?: boolean
 }
 
 interface GameDetailProps {
@@ -152,9 +153,18 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
   const recReqs = data.system_requirements?.recommended
   const hasSystemReqs = minReqs?.os || minReqs?.processor || recReqs?.os || recReqs?.processor
   const isTextOnly = !!data._rawText && !data.developer && downloadLinks.length === 0
+  const isLoading = !!data._isLoading
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Loading indicator bar */}
+      {isLoading && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted overflow-hidden">
+          <div className="h-full bg-primary animate-pulse" style={{ width: '60%', animation: 'loading-bar 2s ease-in-out infinite' }} />
+          <style>{`@keyframes loading-bar { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
+        </div>
+      )}
+
       {/* Hero Banner */}
       <div className="relative bg-gradient-to-br from-primary/20 via-card to-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -203,6 +213,14 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
               {/* Summary text when present */}
               {data.summary && !isTextOnly && (
                 <p className="text-sm text-muted-foreground leading-relaxed mt-2 max-w-2xl">{data.summary}</p>
+              )}
+
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <span className="text-xs text-muted-foreground">Fetching latest game info from the web...</span>
+                </div>
               )}
             </div>
 
