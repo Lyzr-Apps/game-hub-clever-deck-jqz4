@@ -114,14 +114,25 @@ export default function Page() {
   const [chatOpen, setChatOpen] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
+  const [searchError, setSearchError] = useState<string | null>(null)
 
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return
     setSearchLoading(true)
     setActiveAgentId(AGENT_ID)
+    setSearchError(null)
 
     try {
       const result = await callAIAgent(query, AGENT_ID)
+
+      if (!result || !result.success) {
+        const errMsg = result?.error || result?.response?.message || 'Could not fetch game info. Please try again.'
+        setSearchError(errMsg)
+        setSearchLoading(false)
+        setActiveAgentId(null)
+        return
+      }
+
       const parsed = parseAgentResponse(result)
 
       if (parsed) {
@@ -133,10 +144,12 @@ export default function Page() {
         if (text) {
           setGameDetail({ game_title: query, summary: text })
           setCurrentView('detail')
+        } else {
+          setSearchError('Unable to parse game data. Please try a different search.')
         }
       }
     } catch {
-      // silently handle
+      setSearchError('Network error. Please check your connection and try again.')
     } finally {
       setSearchLoading(false)
       setActiveAgentId(null)
@@ -166,6 +179,7 @@ export default function Page() {
             onToggleChat={handleToggleChat}
             searchLoading={searchLoading}
             activeAgentId={activeAgentId}
+            searchError={searchError}
           />
         )}
 

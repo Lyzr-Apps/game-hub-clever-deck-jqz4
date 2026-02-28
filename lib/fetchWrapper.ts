@@ -1,11 +1,17 @@
 import { isInIframe } from "@/components/ErrorBoundary";
 
+// Track retry state to avoid spamming parent with transient errors
+let networkErrorCount = 0;
+const MAX_SILENT_RETRIES = 2;
+
 const sendErrorToParent = (
   message: string,
   status?: number,
   endpoint?: string,
 ) => {
-  console.error(`[FetchWrapper] ${message}`, { status, endpoint });
+  // Use console.warn instead of console.error to avoid triggering
+  // the ErrorBoundary's console.error interceptor cascade
+  console.warn(`[FetchWrapper] ${message}`, { status, endpoint });
 
   if (isInIframe()) {
     window.parent.postMessage(
@@ -26,18 +32,21 @@ const sendErrorToParent = (
   }
 };
 
-const fetchWrapper = async (...args) => {
+const fetchWrapper = async (...args: Parameters<typeof fetch>): Promise<Response> => {
   try {
     const response = await fetch(...args);
+
+    // Reset network error count on successful fetch
+    networkErrorCount = 0;
 
     // if backend sent a redirect
     if (response.redirected) {
       window.location.href = response.url; // update ui to go to the redirected UI (often /login)
-      return;
+      return response;
     }
 
     // Tool authentication required on /api/agent - inspect body for tool_auth keyword
-    const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+    const requestUrl = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url || "";
     if (requestUrl.includes("/api/agent")) {
       const contentType = response.headers.get("content-type") || "";
       if (contentType.includes("application/json")) {
@@ -90,34 +99,61 @@ const fetchWrapper = async (...args) => {
         document.write(html);
         document.close();
 
-        return;
+        return response;
       } else {
-        const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+        const reqUrl = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url || "";
         sendErrorToParent(
-          `Backend returned 404 Not Found for ${requestUrl}`,
+          `Backend returned 404 Not Found for ${reqUrl}`,
           404,
-          requestUrl,
+          reqUrl,
         );
       }
     } // if backend is erroring out
     else if (response.status >= 500) {
-      const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+      const reqUrl = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url || "";
       sendErrorToParent(
-        `Backend returned ${response.status} error for ${requestUrl}`,
+        `Backend returned ${response.status} error for ${reqUrl}`,
         response.status,
-        requestUrl,
+        reqUrl,
       );
     }
 
     return response;
   } catch (error) {
-    // network failures
-    const requestUrl = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
-    sendErrorToParent(
-      `Network error: Cannot connect to backend (${requestUrl})`,
-      undefined,
-      requestUrl,
-    );
+    // Network failures - return a synthetic error Response
+    // instead of undefined so callers can handle it gracefully
+    const requestUrl = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url || "";
+
+    networkErrorCount++;
+
+    // Only report to parent after exceeding silent retry threshold
+    // This prevents transient sandbox startup errors from showing
+    if (networkErrorCount > MAX_SILENT_RETRIES) {
+      sendErrorToParent(
+        `Network error: Cannot connect to backend (${requestUrl})`,
+        undefined,
+        requestUrl,
+      );
+    } else {
+      console.warn(`[FetchWrapper] Transient network error (${networkErrorCount}/${MAX_SILENT_RETRIES}):`, requestUrl);
+    }
+
+    // Return a synthetic JSON error response so callers always get a Response object
+    const errorBody = JSON.stringify({
+      success: false,
+      error: `Network error: Cannot connect to backend (${requestUrl})`,
+      response: {
+        status: 'error',
+        result: {},
+        message: error instanceof Error ? error.message : 'Network error',
+      },
+    });
+
+    return new Response(errorBody, {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 };
 

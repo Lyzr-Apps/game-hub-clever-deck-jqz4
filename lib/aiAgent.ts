@@ -137,8 +137,8 @@ export async function callAIAgent(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_id }),
       })
-      if (!pollRes) {
-        continue // fetchWrapper returned undefined (redirect/error) — retry next poll
+      if (!pollRes || pollRes.status === 503) {
+        continue // fetchWrapper returned error — retry next poll
       }
       const pollData = await pollRes.json()
 

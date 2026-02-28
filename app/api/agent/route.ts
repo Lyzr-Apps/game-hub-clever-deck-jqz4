@@ -115,11 +115,18 @@ function normalizeResponse(parsed: any): NormalizedAgentResponse {
 }
 
 /**
+ * GET /api/agent — health check
+ */
+export async function GET() {
+  return NextResponse.json({ status: 'ok', configured: !!LYZR_API_KEY })
+}
+
+/**
  * POST /api/agent
  *
  * Two modes, both POST:
- *   1. Submit:  body has { message, agent_id, ... }  → submits task, returns { task_id }
- *   2. Poll:    body has { task_id }                  → polls Lyzr, returns status/result
+ *   1. Submit:  body has { message, agent_id, ... }  -> submits task, returns { task_id }
+ *   2. Poll:    body has { task_id }                  -> polls Lyzr, returns status/result
  */
 export async function POST(request: NextRequest) {
   try {

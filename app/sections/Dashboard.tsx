@@ -18,6 +18,7 @@ interface DashboardProps {
   onToggleChat: () => void
   searchLoading: boolean
   activeAgentId: string | null
+  searchError?: string | null
 }
 
 const SAMPLE_GAMES = [
@@ -48,7 +49,7 @@ function platformColor(platform: string): string {
   }
 }
 
-export default function Dashboard({ onSearch, onViewDetail, onToggleChat, searchLoading, activeAgentId }: DashboardProps) {
+export default function Dashboard({ onSearch, onViewDetail, onToggleChat, searchLoading, activeAgentId, searchError }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activePlatform, setActivePlatform] = useState<string>('All')
   const [sampleData, setSampleData] = useState(false)
@@ -123,6 +124,12 @@ export default function Dashboard({ onSearch, onViewDetail, onToggleChat, search
               </Button>
             </div>
           </form>
+
+          {searchError && (
+            <div className="mt-4 max-w-2xl mx-auto p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center">
+              {searchError}
+            </div>
+          )}
         </div>
 
         {/* Loading state */}
