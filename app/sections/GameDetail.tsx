@@ -5,10 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { FiArrowLeft, FiExternalLink, FiCpu, FiHardDrive, FiMonitor } from 'react-icons/fi'
-import { FaStar, FaSteam, FaPlaystation, FaXbox, FaApple, FaGooglePlay, FaWindows, FaDownload, FaCalendarAlt, FaCodeBranch } from 'react-icons/fa'
+import { FaStar, FaSteam, FaPlaystation, FaXbox, FaApple, FaGooglePlay, FaWindows, FaDownload, FaCalendarAlt, FaCodeBranch, FaInfoCircle } from 'react-icons/fa'
 
 interface GameData {
   game_title?: string
@@ -29,6 +28,7 @@ interface GameData {
   ratings?: Array<{ source?: string; score?: string }>
   related_games?: string[]
   summary?: string
+  _rawText?: string
 }
 
 interface GameDetailProps {
@@ -42,22 +42,57 @@ function renderMarkdown(text: string) {
   return (
     <div className="space-y-2">
       {text.split('\n').map((line, i) => {
-        if (line.startsWith('### ')) return <h4 key={i} className="font-semibold text-sm mt-3 mb-1">{line.slice(4)}</h4>
-        if (line.startsWith('## ')) return <h3 key={i} className="font-semibold text-base mt-3 mb-1">{line.slice(3)}</h3>
-        if (line.startsWith('# ')) return <h2 key={i} className="font-bold text-lg mt-4 mb-2">{line.slice(2)}</h2>
-        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc text-sm">{formatInline(line.slice(2))}</li>
-        if (/^\d+\.\s/.test(line)) return <li key={i} className="ml-4 list-decimal text-sm">{formatInline(line.replace(/^\d+\.\s/, ''))}</li>
+        if (line.startsWith('### ')) return <h4 key={i} className="font-semibold text-sm mt-3 mb-1 text-foreground">{line.slice(4)}</h4>
+        if (line.startsWith('## ')) return <h3 key={i} className="font-semibold text-base mt-3 mb-1 text-foreground">{line.slice(3)}</h3>
+        if (line.startsWith('# ')) return <h2 key={i} className="font-bold text-lg mt-4 mb-2 text-foreground">{line.slice(2)}</h2>
+        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc text-sm text-foreground/90">{formatInline(line.slice(2))}</li>
+        if (/^\d+\.\s/.test(line)) return <li key={i} className="ml-4 list-decimal text-sm text-foreground/90">{formatInline(line.replace(/^\d+\.\s/, ''))}</li>
         if (!line.trim()) return <div key={i} className="h-1" />
-        return <p key={i} className="text-sm">{formatInline(line)}</p>
+        return <p key={i} className="text-sm text-foreground/90 leading-relaxed">{formatInline(line)}</p>
       })}
     </div>
   )
 }
 
 function formatInline(text: string) {
-  const parts = text.split(/\*\*(.*?)\*\*/g)
-  if (parts.length === 1) return text
-  return parts.map((part, i) => i % 2 === 1 ? <strong key={i} className="font-semibold">{part}</strong> : part)
+  // Handle bold, links, and inline code
+  // Process bold markers
+  const boldParts = text.split(/\*\*(.*?)\*\*/g)
+  if (boldParts.length > 1) {
+    return boldParts.map((part, i) => {
+      if (i % 2 === 1) return <strong key={i} className="font-semibold text-foreground">{part}</strong>
+      // Check for links in non-bold parts
+      return formatLinks(part, i)
+    })
+  }
+
+  return formatLinks(text, 0)
+}
+
+function formatLinks(text: string, baseKey: number) {
+  // Match markdown links [text](url)
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+  let match
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index))
+    }
+    parts.push(
+      <a key={`link-${baseKey}-${match.index}`} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+        {match[1]}
+      </a>
+    )
+    lastIndex = match.index + match[0].length
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex))
+  }
+
+  return parts.length > 0 ? parts : text
 }
 
 function platformColor(platform: string): string {
@@ -77,7 +112,7 @@ function storeIcon(storeName: string) {
   if (s.includes('xbox') || s.includes('microsoft')) return <FaXbox className="w-4 h-4" />
   if (s.includes('apple') || s.includes('app store') || s.includes('ios')) return <FaApple className="w-4 h-4" />
   if (s.includes('google') || s.includes('play store') || s.includes('android')) return <FaGooglePlay className="w-4 h-4" />
-  if (s.includes('windows') || s.includes('pc')) return <FaWindows className="w-4 h-4" />
+  if (s.includes('windows') || s.includes('pc') || s.includes('epic')) return <FaWindows className="w-4 h-4" />
   return <FaDownload className="w-4 h-4" />
 }
 
@@ -88,6 +123,8 @@ function storeButtonColor(storeName: string): string {
   if (s.includes('xbox') || s.includes('microsoft')) return 'bg-[#107c10] hover:bg-[#0e6b0e] border-[#0e6b0e]'
   if (s.includes('apple') || s.includes('app store') || s.includes('ios')) return 'bg-[#333] hover:bg-[#555] border-[#555]'
   if (s.includes('google') || s.includes('play store') || s.includes('android')) return 'bg-[#01875f] hover:bg-[#02a672] border-[#02a672]'
+  if (s.includes('epic')) return 'bg-[#2a2a2a] hover:bg-[#404040] border-[#404040]'
+  if (s.includes('nintendo') || s.includes('eshop')) return 'bg-[#e60012] hover:bg-[#ff1a2d] border-[#ff1a2d]'
   return 'bg-primary hover:bg-primary/90 border-primary'
 }
 
@@ -95,19 +132,26 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
   if (!data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">No game data available.</p>
+        <div className="text-center space-y-4">
+          <FaInfoCircle className="w-12 h-12 text-muted-foreground mx-auto" />
+          <p className="text-muted-foreground">No game data available.</p>
+          <Button variant="outline" onClick={onBack} className="gap-2">
+            <FiArrowLeft className="w-4 h-4" /> Back to Dashboard
+          </Button>
+        </div>
       </div>
     )
   }
 
-  const platforms = Array.isArray(data?.platforms) ? data.platforms : []
-  const genres = Array.isArray(data?.genre) ? data.genre : []
-  const downloadLinks = Array.isArray(data?.download_links) ? data.download_links : []
-  const ratings = Array.isArray(data?.ratings) ? data.ratings : []
-  const relatedGames = Array.isArray(data?.related_games) ? data.related_games : []
-  const minReqs = data?.system_requirements?.minimum
-  const recReqs = data?.system_requirements?.recommended
+  const platforms = Array.isArray(data.platforms) ? data.platforms : []
+  const genres = Array.isArray(data.genre) ? data.genre : []
+  const downloadLinks = Array.isArray(data.download_links) ? data.download_links : []
+  const ratings = Array.isArray(data.ratings) ? data.ratings : []
+  const relatedGames = Array.isArray(data.related_games) ? data.related_games : []
+  const minReqs = data.system_requirements?.minimum
+  const recReqs = data.system_requirements?.recommended
   const hasSystemReqs = minReqs?.os || minReqs?.processor || recReqs?.os || recReqs?.processor
+  const isTextOnly = !!data._rawText && !data.developer && downloadLinks.length === 0
 
   return (
     <div className="min-h-screen bg-background">
@@ -121,23 +165,27 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Title Area */}
             <div className="flex-1 space-y-4">
-              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{data?.game_title ?? 'Unknown Game'}</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{data.game_title ?? 'Game Info'}</h1>
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                {data?.developer && <span>by <span className="text-foreground font-medium">{data.developer}</span></span>}
-                {data?.publisher && data.publisher !== data.developer && <span>Published by <span className="text-foreground font-medium">{data.publisher}</span></span>}
+                {data.developer && <span>by <span className="text-foreground font-medium">{data.developer}</span></span>}
+                {data.publisher && data.publisher !== data.developer && <span>Published by <span className="text-foreground font-medium">{data.publisher}</span></span>}
               </div>
 
               {/* Platform + Genre badges */}
-              <div className="flex flex-wrap gap-2">
-                {platforms.map((p, i) => (
-                  <span key={i} className={cn('text-xs px-2.5 py-1 rounded-full border font-medium', platformColor(p))}>{p}</span>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {genres.map((g, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs">{g}</Badge>
-                ))}
-              </div>
+              {platforms.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {platforms.map((p, i) => (
+                    <span key={i} className={cn('text-xs px-2.5 py-1 rounded-full border font-medium', platformColor(typeof p === 'string' ? p : ''))}>{typeof p === 'string' ? p : String(p)}</span>
+                  ))}
+                </div>
+              )}
+              {genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {genres.map((g, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">{typeof g === 'string' ? g : String(g)}</Badge>
+                  ))}
+                </div>
+              )}
 
               {/* Ratings inline */}
               {ratings.length > 0 && (
@@ -151,43 +199,50 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
                   ))}
                 </div>
               )}
+
+              {/* Summary text when present */}
+              {data.summary && !isTextOnly && (
+                <p className="text-sm text-muted-foreground leading-relaxed mt-2 max-w-2xl">{data.summary}</p>
+              )}
             </div>
 
             {/* Version Info Panel */}
-            <div className="lg:w-72 space-y-3">
-              <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.1)]">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    <FaCodeBranch className="w-4 h-4 text-primary" />
-                    <span className="text-muted-foreground">Current Version</span>
-                  </div>
-                  <p className="text-lg font-mono font-semibold text-foreground">{data?.current_version ?? 'N/A'}</p>
-                  {data?.release_date && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <FaCalendarAlt className="w-3 h-3" />
-                      <span>Released {data.release_date}</span>
+            {(data.current_version || data.release_date || data.upcoming_version) && (
+              <div className="lg:w-72 space-y-3">
+                <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.1)]">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <FaCodeBranch className="w-4 h-4 text-primary" />
+                      <span className="text-muted-foreground">Current Version</span>
                     </div>
-                  )}
-
-                  {data?.upcoming_version && (
-                    <>
-                      <div className="h-px bg-border" />
-                      <div className="flex items-center gap-2 text-sm">
-                        <FaCodeBranch className="w-4 h-4 text-accent" />
-                        <span className="text-muted-foreground">Upcoming</span>
+                    <p className="text-lg font-mono font-semibold text-foreground">{data.current_version ?? 'N/A'}</p>
+                    {data.release_date && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <FaCalendarAlt className="w-3 h-3" />
+                        <span>Released {data.release_date}</span>
                       </div>
-                      <p className="text-lg font-mono font-semibold text-accent">{data.upcoming_version}</p>
-                      {data?.upcoming_release_date && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <FaCalendarAlt className="w-3 h-3" />
-                          <span>Expected {data.upcoming_release_date}</span>
+                    )}
+
+                    {data.upcoming_version && (
+                      <>
+                        <div className="h-px bg-border" />
+                        <div className="flex items-center gap-2 text-sm">
+                          <FaCodeBranch className="w-4 h-4 text-accent" />
+                          <span className="text-muted-foreground">Upcoming</span>
                         </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                        <p className="text-lg font-mono font-semibold text-accent">{data.upcoming_version}</p>
+                        {data.upcoming_release_date && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <FaCalendarAlt className="w-3 h-3" />
+                            <span>Expected {data.upcoming_release_date}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -198,111 +253,142 @@ export default function GameDetail({ data, onBack, onSearchGame }: GameDetailPro
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-foreground">Download / Purchase</h3>
             <div className="flex flex-wrap gap-3">
-              {downloadLinks.map((link, i) => (
-                <a key={i} href={link?.url ?? '#'} target="_blank" rel="noopener noreferrer" className={cn('inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-medium text-white border transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]', storeButtonColor(link?.store_name ?? ''))}>
-                  {storeIcon(link?.store_name ?? '')}
-                  <span>{link?.store_name ?? link?.platform ?? 'Download'}</span>
-                  <FiExternalLink className="w-3.5 h-3.5 opacity-60" />
-                </a>
-              ))}
+              {downloadLinks.map((link, i) => {
+                const url = link?.url ?? ''
+                const storeName = link?.store_name ?? link?.platform ?? 'Download'
+                const isValidUrl = url.startsWith('http://') || url.startsWith('https://')
+                return (
+                  <a
+                    key={i}
+                    href={isValidUrl ? url : '#'}
+                    target={isValidUrl ? '_blank' : undefined}
+                    rel={isValidUrl ? 'noopener noreferrer' : undefined}
+                    onClick={isValidUrl ? undefined : (e) => e.preventDefault()}
+                    className={cn(
+                      'inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-medium text-white border transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]',
+                      storeButtonColor(typeof storeName === 'string' ? storeName : '')
+                    )}
+                  >
+                    {storeIcon(typeof storeName === 'string' ? storeName : '')}
+                    <span>{typeof storeName === 'string' ? storeName : 'Download'}</span>
+                    {isValidUrl && <FiExternalLink className="w-3.5 h-3.5 opacity-60" />}
+                  </a>
+                )
+              })}
             </div>
           </div>
         )}
 
-        {/* Tabbed Content */}
-        <Tabs defaultValue="description" className="w-full">
-          <TabsList className="bg-card border border-border">
-            <TabsTrigger value="description" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Description</TabsTrigger>
-            {hasSystemReqs && <TabsTrigger value="sysreqs" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">System Requirements</TabsTrigger>}
-            {ratings.length > 0 && <TabsTrigger value="ratings" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Ratings</TabsTrigger>}
-          </TabsList>
+        {/* Content - Tabbed for structured data, plain for text-only */}
+        {isTextOnly ? (
+          // Text-only response: render as markdown content
+          <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-4">Game Information</h3>
+              {data.description ? renderMarkdown(data.description) : (
+                <p className="text-muted-foreground text-sm">No information available.</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          // Structured data: use tabs
+          <Tabs defaultValue="description" className="w-full">
+            <TabsList className="bg-card border border-border">
+              <TabsTrigger value="description" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Description</TabsTrigger>
+              {hasSystemReqs && <TabsTrigger value="sysreqs" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">System Requirements</TabsTrigger>}
+              {ratings.length > 0 && <TabsTrigger value="ratings" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Ratings</TabsTrigger>}
+            </TabsList>
 
-          <TabsContent value="description" className="mt-4">
-            <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
-              <CardContent className="p-6">
-                {data?.description ? renderMarkdown(data.description) : <p className="text-muted-foreground text-sm">No description available.</p>}
-                {data?.summary && data.summary !== data.description && (
-                  <div className="mt-6 pt-4 border-t border-border">
-                    <h4 className="text-sm font-semibold text-foreground mb-2">Summary</h4>
-                    {renderMarkdown(data.summary)}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {hasSystemReqs && (
-            <TabsContent value="sysreqs" className="mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {minReqs && (minReqs.os || minReqs.processor) && (
-                  <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base text-foreground">Minimum</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {minReqs.os && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">OS</p><p className="text-sm text-foreground">{minReqs.os}</p></div></div>}
-                      {minReqs.processor && <div className="flex items-start gap-3"><FiCpu className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Processor</p><p className="text-sm text-foreground">{minReqs.processor}</p></div></div>}
-                      {minReqs.memory && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Memory</p><p className="text-sm text-foreground">{minReqs.memory}</p></div></div>}
-                      {minReqs.graphics && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Graphics</p><p className="text-sm text-foreground">{minReqs.graphics}</p></div></div>}
-                      {minReqs.storage && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Storage</p><p className="text-sm text-foreground">{minReqs.storage}</p></div></div>}
-                    </CardContent>
-                  </Card>
-                )}
-                {recReqs && (recReqs.os || recReqs.processor) && (
-                  <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base text-foreground">Recommended</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {recReqs.os && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">OS</p><p className="text-sm text-foreground">{recReqs.os}</p></div></div>}
-                      {recReqs.processor && <div className="flex items-start gap-3"><FiCpu className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Processor</p><p className="text-sm text-foreground">{recReqs.processor}</p></div></div>}
-                      {recReqs.memory && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Memory</p><p className="text-sm text-foreground">{recReqs.memory}</p></div></div>}
-                      {recReqs.graphics && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Graphics</p><p className="text-sm text-foreground">{recReqs.graphics}</p></div></div>}
-                      {recReqs.storage && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Storage</p><p className="text-sm text-foreground">{recReqs.storage}</p></div></div>}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-          )}
-
-          {ratings.length > 0 && (
-            <TabsContent value="ratings" className="mt-4">
+            <TabsContent value="description" className="mt-4">
               <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
                 <CardContent className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {ratings.map((r, i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 bg-secondary/50 rounded-xl border border-border">
-                        <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                          <FaStar className="w-5 h-5 text-yellow-400" />
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-foreground">{r?.score ?? '-'}</p>
-                          <p className="text-xs text-muted-foreground">{r?.source ?? 'Unknown'}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {data.description ? renderMarkdown(data.description) : <p className="text-muted-foreground text-sm">No description available.</p>}
+                  {data.summary && data.summary !== data.description && (
+                    <div className="mt-6 pt-4 border-t border-border">
+                      <h4 className="text-sm font-semibold text-foreground mb-2">Summary</h4>
+                      {renderMarkdown(data.summary)}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
-          )}
-        </Tabs>
+
+            {hasSystemReqs && (
+              <TabsContent value="sysreqs" className="mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {minReqs && (minReqs.os || minReqs.processor) && (
+                    <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base text-foreground">Minimum</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {minReqs.os && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">OS</p><p className="text-sm text-foreground">{minReqs.os}</p></div></div>}
+                        {minReqs.processor && <div className="flex items-start gap-3"><FiCpu className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Processor</p><p className="text-sm text-foreground">{minReqs.processor}</p></div></div>}
+                        {minReqs.memory && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Memory</p><p className="text-sm text-foreground">{minReqs.memory}</p></div></div>}
+                        {minReqs.graphics && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Graphics</p><p className="text-sm text-foreground">{minReqs.graphics}</p></div></div>}
+                        {minReqs.storage && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Storage</p><p className="text-sm text-foreground">{minReqs.storage}</p></div></div>}
+                      </CardContent>
+                    </Card>
+                  )}
+                  {recReqs && (recReqs.os || recReqs.processor) && (
+                    <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base text-foreground">Recommended</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {recReqs.os && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">OS</p><p className="text-sm text-foreground">{recReqs.os}</p></div></div>}
+                        {recReqs.processor && <div className="flex items-start gap-3"><FiCpu className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Processor</p><p className="text-sm text-foreground">{recReqs.processor}</p></div></div>}
+                        {recReqs.memory && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Memory</p><p className="text-sm text-foreground">{recReqs.memory}</p></div></div>}
+                        {recReqs.graphics && <div className="flex items-start gap-3"><FiMonitor className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Graphics</p><p className="text-sm text-foreground">{recReqs.graphics}</p></div></div>}
+                        {recReqs.storage && <div className="flex items-start gap-3"><FiHardDrive className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Storage</p><p className="text-sm text-foreground">{recReqs.storage}</p></div></div>}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </TabsContent>
+            )}
+
+            {ratings.length > 0 && (
+              <TabsContent value="ratings" className="mt-4">
+                <Card className="bg-card border-border shadow-[0_8px_32px_rgba(139,92,246,0.08)]">
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {ratings.map((r, i) => (
+                        <div key={i} className="flex items-center gap-4 p-4 bg-secondary/50 rounded-xl border border-border">
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                            <FaStar className="w-5 h-5 text-yellow-400" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-bold text-foreground">{r?.score ?? '-'}</p>
+                            <p className="text-xs text-muted-foreground">{r?.source ?? 'Unknown'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+          </Tabs>
+        )}
 
         {/* Related Games */}
         {relatedGames.length > 0 && (
           <div className="space-y-3">
             <h3 className="text-lg font-semibold text-foreground">Related Games</h3>
             <div className="flex flex-wrap gap-2">
-              {relatedGames.map((game, i) => (
-                <button
-                  key={i}
-                  onClick={() => onSearchGame(typeof game === 'string' ? game : '')}
-                  className="px-4 py-2 bg-card border border-border rounded-xl text-sm text-foreground hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md"
-                >
-                  {typeof game === 'string' ? game : 'Unknown'}
-                </button>
-              ))}
+              {relatedGames.map((game, i) => {
+                const gameName = typeof game === 'string' ? game : (game as any)?.name || (game as any)?.title || String(game)
+                return (
+                  <button
+                    key={i}
+                    onClick={() => onSearchGame(gameName)}
+                    className="px-4 py-2 bg-card border border-border rounded-xl text-sm text-foreground hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all duration-300 shadow-sm hover:shadow-md"
+                  >
+                    {gameName}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}

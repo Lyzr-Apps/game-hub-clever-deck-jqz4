@@ -42,7 +42,7 @@ class ErrorBoundary extends React.Component<
 }
 
 // ---------- Types ----------
-interface GameData {
+export interface GameData {
   game_title?: string
   developer?: string
   publisher?: string
@@ -61,50 +61,161 @@ interface GameData {
   ratings?: Array<{ source?: string; score?: string }>
   related_games?: string[]
   summary?: string
+  // Fallback field for text-only responses
+  _rawText?: string
 }
 
-// ---------- Helper: parse agent response ----------
-function parseAgentResponse(result: AIAgentResponse): GameData | null {
-  if (!result?.success) return null
-
-  let data = result?.response?.result
-  if (!data) return null
-
-  // Handle string-wrapped JSON
-  if (typeof data === 'string') {
+// ---------- Deep extract: dig through any nesting to find game data ----------
+function deepExtractGameData(obj: any, depth: number = 0): any {
+  if (depth > 8 || !obj) return null
+  if (typeof obj === 'string') {
+    // Try parsing as JSON
     try {
-      data = JSON.parse(data)
+      const parsed = JSON.parse(obj)
+      return deepExtractGameData(parsed, depth + 1)
     } catch {
-      // Try raw_response fallback
-      if (result?.raw_response) {
-        try {
-          data = JSON.parse(result.raw_response)
-        } catch {
-          return null
-        }
-      } else {
-        return null
+      return null
+    }
+  }
+  if (typeof obj !== 'object') return null
+
+  // Check if this object IS game data (has game_title or similar fields)
+  if (obj.game_title || obj.gameTitle || obj.title || obj.name) {
+    return obj
+  }
+
+  // Check if it has a results array (list query response)
+  if (Array.isArray(obj.results) && obj.results.length > 0) {
+    return obj
+  }
+
+  // Unwrap known wrapper keys
+  const wrapperKeys = ['result', 'response', 'data', 'output', 'content', 'message', 'text', 'answer']
+  for (const key of wrapperKeys) {
+    if (obj[key] !== undefined && obj[key] !== null) {
+      const inner = deepExtractGameData(obj[key], depth + 1)
+      if (inner) return inner
+    }
+  }
+
+  // Check all keys for nested game data
+  for (const key of Object.keys(obj)) {
+    if (wrapperKeys.includes(key)) continue
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
+      const inner = deepExtractGameData(obj[key], depth + 1)
+      if (inner) return inner
+    }
+  }
+
+  return null
+}
+
+// ---------- Normalize field names ----------
+function normalizeGameFields(data: any): GameData {
+  if (!data || typeof data !== 'object') return {}
+
+  return {
+    game_title: data.game_title || data.gameTitle || data.title || data.name || undefined,
+    developer: data.developer || data.developedBy || undefined,
+    publisher: data.publisher || data.publishedBy || undefined,
+    description: data.description || data.overview || data.about || undefined,
+    platforms: Array.isArray(data.platforms) ? data.platforms :
+               (typeof data.platforms === 'string' ? [data.platforms] : undefined),
+    genre: Array.isArray(data.genre) ? data.genre :
+           Array.isArray(data.genres) ? data.genres :
+           (typeof data.genre === 'string' ? [data.genre] : undefined),
+    current_version: data.current_version || data.currentVersion || data.version || undefined,
+    release_date: data.release_date || data.releaseDate || data.released || undefined,
+    upcoming_version: data.upcoming_version || data.upcomingVersion || null,
+    upcoming_release_date: data.upcoming_release_date || data.upcomingReleaseDate || null,
+    download_links: Array.isArray(data.download_links) ? data.download_links :
+                    Array.isArray(data.downloadLinks) ? data.downloadLinks :
+                    Array.isArray(data.links) ? data.links : undefined,
+    system_requirements: data.system_requirements || data.systemRequirements || data.requirements || undefined,
+    ratings: Array.isArray(data.ratings) ? data.ratings :
+             Array.isArray(data.scores) ? data.scores : undefined,
+    related_games: Array.isArray(data.related_games) ? data.related_games :
+                   Array.isArray(data.relatedGames) ? data.relatedGames :
+                   Array.isArray(data.similar_games) ? data.similar_games : undefined,
+    summary: data.summary || data.brief || undefined,
+  }
+}
+
+// ---------- Helper: parse agent response robustly ----------
+function parseAgentResponse(result: AIAgentResponse, queryText: string): GameData | null {
+  if (!result) return null
+
+  // Try multiple extraction paths
+  const sources: any[] = []
+
+  // Path 1: result.response.result (standard path)
+  if (result.response?.result) {
+    sources.push(result.response.result)
+  }
+
+  // Path 2: result.response itself
+  if (result.response) {
+    sources.push(result.response)
+  }
+
+  // Path 3: raw_response
+  if (result.raw_response) {
+    sources.push(result.raw_response)
+  }
+
+  // Path 4: the entire result object
+  sources.push(result)
+
+  // Try each source to find game data
+  for (const source of sources) {
+    const extracted = deepExtractGameData(source)
+    if (extracted) {
+      const normalized = normalizeGameFields(extracted)
+      // Check if we got meaningful structured data (at least a title)
+      if (normalized.game_title) {
+        return normalized
       }
     }
   }
 
-  // Ensure we have an object
-  if (!data || typeof data !== 'object') {
-    // Try raw_response fallback
-    if (result?.raw_response) {
+  // Fallback: extract text content and create a text-based game detail
+  const textSources = [
+    result.response?.message,
+    result.response?.result?.text,
+    result.response?.result?.message,
+    result.response?.result?.answer,
+    result.response?.result?.content,
+    result.response?.result?.response,
+    typeof result.response?.result === 'string' ? result.response.result : null,
+    result.raw_response,
+    extractText(result.response ?? { status: 'error', result: {} }),
+  ]
+
+  for (const text of textSources) {
+    if (typeof text === 'string' && text.trim().length > 20) {
+      // Try to parse JSON from the text one more time
       try {
-        const parsed = JSON.parse(result.raw_response)
-        if (parsed && typeof parsed === 'object') {
-          data = parsed
+        const parsed = JSON.parse(text)
+        const extracted = deepExtractGameData(parsed)
+        if (extracted) {
+          const normalized = normalizeGameFields(extracted)
+          if (normalized.game_title) return normalized
         }
       } catch {
-        return null
+        // Not JSON - use as raw text description
+      }
+
+      // Return as text-based response
+      return {
+        game_title: queryText,
+        description: text,
+        summary: text.substring(0, 300),
+        _rawText: text,
       }
     }
-    if (!data || typeof data !== 'object') return null
   }
 
-  return data as GameData
+  return null
 }
 
 // ---------- Main Page ----------
@@ -125,28 +236,22 @@ export default function Page() {
     try {
       const result = await callAIAgent(query, AGENT_ID)
 
-      if (!result || !result.success) {
-        const errMsg = result?.error || result?.response?.message || 'Could not fetch game info. Please try again.'
-        setSearchError(errMsg)
-        setSearchLoading(false)
-        setActiveAgentId(null)
+      if (!result) {
+        setSearchError('No response from agent. Please try again.')
         return
       }
 
-      const parsed = parseAgentResponse(result)
+      // Parse regardless of success flag - sometimes success is false but data exists
+      const parsed = parseAgentResponse(result, query)
 
       if (parsed) {
         setGameDetail(parsed)
         setCurrentView('detail')
+      } else if (result.success === false) {
+        const errMsg = result.error || result.response?.message || 'Could not fetch game info. Please try again.'
+        setSearchError(errMsg)
       } else {
-        // Fallback: create minimal data from whatever text we got
-        const text = extractText(result?.response ?? { status: 'error', result: {} })
-        if (text) {
-          setGameDetail({ game_title: query, summary: text })
-          setCurrentView('detail')
-        } else {
-          setSearchError('Unable to parse game data. Please try a different search.')
-        }
+        setSearchError('Unable to parse game data. Please try a different search.')
       }
     } catch {
       setSearchError('Network error. Please check your connection and try again.')

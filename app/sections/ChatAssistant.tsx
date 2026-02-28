@@ -140,20 +140,67 @@ export default function ChatAssistant({ isOpen, onClose }: ChatAssistantProps) {
       let parsedData: Record<string, any> | null = null
       let textContent = ''
 
-      if (result.success) {
-        let responseData = result?.response?.result
-        if (typeof responseData === 'string') {
-          try { responseData = JSON.parse(responseData) } catch { /* keep as string */ }
+      if (result) {
+        // Try to extract structured data from multiple paths
+        const dataSources = [
+          result.response?.result,
+          result.response,
+          result.raw_response,
+          result,
+        ]
+
+        for (const source of dataSources) {
+          if (!source) continue
+          let candidate = source
+          // If string, try to parse as JSON
+          if (typeof candidate === 'string') {
+            try { candidate = JSON.parse(candidate) } catch { continue }
+          }
+          if (candidate && typeof candidate === 'object') {
+            // Check if this looks like game data (has title or results)
+            if (candidate.game_title || candidate.title || candidate.name || (Array.isArray(candidate.results) && candidate.results.length > 0)) {
+              parsedData = candidate
+              textContent = candidate.summary ?? candidate.description ?? ''
+              break
+            }
+            // Check nested result/text
+            if (candidate.result && typeof candidate.result === 'object') {
+              const inner = candidate.result
+              if (inner.game_title || inner.title || inner.name) {
+                parsedData = inner
+                textContent = inner.summary ?? inner.description ?? ''
+                break
+              }
+            }
+          }
         }
 
-        if (responseData && typeof responseData === 'object') {
-          parsedData = responseData
-          textContent = responseData?.summary ?? responseData?.description ?? extractText(result.response) ?? ''
-        } else {
-          textContent = extractText(result.response) || String(responseData ?? '')
+        // If no structured data found, use text extraction
+        if (!parsedData) {
+          const textSources = [
+            result.response?.message,
+            result.response?.result?.text,
+            result.response?.result?.message,
+            result.response?.result?.answer,
+            typeof result.response?.result === 'string' ? result.response.result : null,
+            result.raw_response,
+            extractText(result.response ?? { status: 'error', result: {} }),
+          ]
+          for (const t of textSources) {
+            if (typeof t === 'string' && t.trim().length > 10) {
+              textContent = t
+              break
+            }
+          }
+        }
+
+        if (!textContent && !parsedData) {
+          textContent = result.success === false
+            ? (result.error ?? 'Sorry, I could not process your request. Please try again.')
+            : 'No response received. Please try again.'
         }
       } else {
-        textContent = result?.error ?? 'Sorry, I could not process your request. Please try again.'
+        textContent = 'No response from agent. Please try again.'
       }
 
       const assistantMsg: ChatMessage = {
@@ -233,6 +280,17 @@ export default function ChatAssistant({ isOpen, onClose }: ChatAssistantProps) {
               )}>
                 {msg.role === 'assistant' && msg.parsedData ? (
                   formatChatGameData(msg.parsedData)
+                ) : msg.role === 'assistant' && msg.content ? (
+                  <div className="text-sm leading-relaxed space-y-1">
+                    {msg.content.split('\n').map((line, li) => {
+                      if (!line.trim()) return <div key={li} className="h-1" />
+                      if (line.startsWith('### ')) return <h4 key={li} className="font-semibold text-xs mt-2 text-foreground">{line.slice(4)}</h4>
+                      if (line.startsWith('## ')) return <h3 key={li} className="font-semibold text-sm mt-2 text-foreground">{line.slice(3)}</h3>
+                      if (line.startsWith('# ')) return <h2 key={li} className="font-semibold text-sm mt-2 text-foreground">{line.slice(2)}</h2>
+                      if (line.startsWith('- ') || line.startsWith('* ')) return <li key={li} className="ml-3 list-disc text-xs">{line.slice(2)}</li>
+                      return <p key={li} className="text-sm">{line}</p>
+                    })}
+                  </div>
                 ) : (
                   <p className="text-sm leading-relaxed">{msg.content}</p>
                 )}
